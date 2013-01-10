@@ -22,7 +22,7 @@
 		return me;
 	}('gravity'));
 
-	gravity.VERSION = '0.6.15';
+	gravity.VERSION = '0.6.18';
 
 	var
 		atom = require('./atom/atom'),
@@ -31,6 +31,11 @@
 		fs = require('fs'),
 		packResources
 	;
+
+	// This should be overridden by caller if a different log handler is desired.
+	gravity.logger = function (msg) {
+		console.log(msg);
+	};
 
 	// Private functions
 
@@ -349,8 +354,8 @@
 			return day + ' ' + time;
 		}
 
-		function log(msg) {
-			console.log(timestamp() + ' [:' + port + '] ' + msg);
+		function serverLog(msg) {
+			gravity.logger(timestamp() + ' [:' + port + '] ' + msg);
 		}
 
 		function httpError(res, code, msg, fileName, suppressLog) {
@@ -358,7 +363,7 @@
 			msg = code + ' ' + msg + ': ' + fileName;
 			res.end(msg);
 			if (!suppressLog) {
-				log(msg);
+				serverLog(msg);
 			}
 		}
 
@@ -390,7 +395,7 @@
 				request.once('map', function (map) {
 					res.writeHead(200, { 'Content-Type': 'application/json' });
 					res.end(JSON.stringify(map));
-					log('200 ' + logURL);
+					serverLog('200 ' + logURL);
 				});
 				return;
 			}
@@ -418,7 +423,7 @@
 				}
 				res.writeHead(200, { 'Content-Type': contentType });
 				res.end(content, 'binary');
-				log('200 ' + logURL);
+				serverLog('200 ' + logURL);
 			});
 		});
 
@@ -432,19 +437,19 @@
 
 		handlePortBindingError = function () {
 			if (port === preferredPort) {
-				console.log('Port ' + preferredPort + ' not available.');
+				gravity.logger('Port ' + preferredPort + ' not available.');
 			}
 			if (++serverTries < 20) {
 				port++;
 				tryBindingToPort();
 			} else {
-				console.log('Unable to find a port to bind to.');
+				gravity.logger('Unable to find a port to bind to.');
 				process.exit(1);
 			}
 		};
 
 		server.on('listening', function () {
-			console.log('Gravity server running on http://' + host + ':' +
+			gravity.logger('Gravity server running on http://' + host + ':' +
 				port + '/');
 		});
 		server.on('error', handlePortBindingError);
@@ -471,9 +476,13 @@
 		}
 	}
 
+	function ensureTrailingSlash(str) {
+		return endsWith(str, '/') ? str : str + '/';
+	}
+
 	function recursiveDirectoryListing(dir, callback) {
-		var a = atom.create(), list = [];
-		a.chain(function (next) {
+		var a = atom.create(), chain = a.chain, list = [], set = a.set;
+		chain(function (next) {
 			fs.readdir(dir, function (err, files) {
 				arrayEach(files, function (i, file) {
 					var subPath = dir + '/' + file;
@@ -486,35 +495,38 @@
 								arrayEach(sublist, function (j, subitem) {
 									list.push(file + '/' + subitem);
 								});
-								a.set(file, true);
+								set(file, true);
 							});
 						} else {
 							list.push(file);
-							a.set(file, true);
+							set(file, true);
 						}
 					});
 				});
 				a.once(files, next);
 			});
 		});
-		a.chain(function () {
+		chain(function () {
 			callback(list);
 		});
 	}
 
 	function getList(base, path, mapNode, callback) {
-		var a = atom.create(), list = [];
+		var a = atom.create(), chain = a.chain, list = [];
 		eachMapProperty(mapNode, function (prop, val, type, isDir) {
 			if (prop.charAt(0) === '~') {
 				return;
 			}
-			a.chain(function (next) {
-				var pathProp = (path ? (path + '/') : '') + prop;
+			chain(function (next) {
+				var
+					pathProp = (path ? ensureTrailingSlash(path) : '') + prop,
+					prefix = ''
+				;
 
 				function handleSublist(sublist) {
 					var i = -1, len = sublist.length;
 					while (++i < len) {
-						list.push(pathProp + sublist[i]);
+						list.push(prefix + sublist[i]);
 					}
 					next();
 				}
@@ -523,6 +535,7 @@
 					getList(base, pathProp, val, handleSublist);
 				} else if (isDir) {
 					// Use fs to list directory contents
+					prefix = pathProp;
 					recursiveDirectoryListing(base + '/' + val, handleSublist);
 				} else {
 					list.push(pathProp);
@@ -530,14 +543,14 @@
 				}
 			});
 		});
-		a.chain(function () {
+		chain(function () {
 			callback(list);
 		});
 	}
 
 	function write(outDir, path, content, callback) {
 		var call = atom.create(), outPath = outDir + '/' + path;
-		console.log('write ' + outPath);
+		gravity.logger('write ' + outPath);
 		fs.open(outPath, 'w', function (err, fd) {
 			if (err) {
 				call.set('done', err);
@@ -551,7 +564,7 @@
 	}
 
 	function createDirectories(out, path, callback) {
-		//console.log('createDirectories(' + out + ', ' + path + ')');
+		//gravity.logger('createDirectories(' + out + ', ' + path + ')');
 		var
 			action = atom.create(),
 			splits = getResourcePathSplits(path),
@@ -575,7 +588,7 @@
 							action.set('done', err);
 						}
 					} else {
-						console.log('mkdir', dir);
+						gravity.logger('mkdir', dir);
 						dirs.set(dir, true);
 					}
 				});
@@ -644,8 +657,8 @@
 	gravity.list = function (mapOrURI, base, callback) {
 		gravity.map(mapOrURI, function (map) {
 			getList(base, '', map, function (list) {
-				//console.log('gravity.list(...)', { mapOrURI: mapOrURI, base: base });
-				//console.log(list);
+				//gravity.logger('gravity.list(...)', { mapOrURI: mapOrURI, base: base });
+				//gravity.logger(list);
 				callback(undefined, list);
 			});
 		});
@@ -661,7 +674,7 @@
 	};
 
 	gravity.pull = function (mapOrURI, base, path, callback) {
-		//console.log('gravity.pull(...)', { mapOrURI: mapOrURI, base: base, path: path });
+		//gravity.logger('gravity.pull(...)', { mapOrURI: mapOrURI, base: base, path: path });
 		gravity.map(mapOrURI, function (map) {
 			getResource(map, base, false, path, callback);
 		});
