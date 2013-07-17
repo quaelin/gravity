@@ -1,5 +1,5 @@
 /*global atom:true, gravity:true, logger:true, process, require*/
-atom = typeof atom === 'undefined' ? require('./atom/atom') : atom;
+atom = typeof atom === 'undefined' ? require('atom-js') : atom;
 gravity = typeof gravity === 'undefined' ? require('./gravity.js') : gravity;
 logger = (typeof logger !== 'undefined' && logger) || console.log;
 
@@ -67,7 +67,7 @@ chain(function (next) {
 		map = src + '/gravity.map',
 		build = base + '/build'
 	;
-	
+
 	chain(function (next) {
 		var
 			file = 'two-files.js',
@@ -130,4 +130,8 @@ chain(function (next) {
 
 chain(function () {
 	logger(totals);
+
+	if (totals.fail && inNode) {
+		process.exit(1);
+	}
 });

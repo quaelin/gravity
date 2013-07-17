@@ -13,6 +13,7 @@ A `gravity.map` is a JSON file that can be thought of as a project manifest.  In
 it, you can specify build targets, and the source files that are used to create
 each target.
 
+```json
 	{
 		"final.js": [
 			"src/1.js",
@@ -20,12 +21,13 @@ each target.
 			...
 		]
 	}
+```
 
 This tells gravity that you want a build product called `final.js`, and that it
 should be the result of compiling various source files (or even other build
 products) together.
 
-Full documentation of gravity.map syntax can be found in the `SYNTAX.md` file.
+Full documentation of gravity.map syntax can be found in [SYNTAX.md](SYNTAX.md).
 
 
 Installation
@@ -33,10 +35,14 @@ Installation
 
 Prerequisites:
 
- - node 0.6 or greater
+ - node 0.8 or greater
  - git 1.7 or greater
 
-To install:
+It is recommended to install for all users:
+
+	sudo npm install -g gravity-js
+
+However, if you prefer it can also be installed in your home dir:
 
 	npm install gravity-js
 
